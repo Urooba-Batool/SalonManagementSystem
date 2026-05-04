@@ -1,0 +1,22 @@
+﻿<h2>Login</h2>
+
+<form method="post">
+
+    <label>Select Role:</label>
+    <select name="UserRole">
+        <option value="Admin">Admin</option>
+        <option value="Staff">Staff</option>
+    </select>
+
+    <br /><br />
+
+    <label>Password:</label>
+    <input type="password" name="UserPassword" />
+
+    <br /><br />
+
+    <button type="submit">Login</button>
+
+</form>
+
+<p style="color:red">@ViewBag.Error</p>
