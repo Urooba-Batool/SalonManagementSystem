@@ -4,8 +4,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 builder.Services.AddScoped<SalonManagementSystem.DAL.DBHelper>();
-
+builder.Services.AddSession();
 var app = builder.Build();
+
+// Automatically ensure non-destructive database initialization
+SalonManagementSystem.DAL.DatabaseInitializer.Initialize(builder.Configuration);
+
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -19,11 +23,12 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+app.UseSession();
 
 app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Login}/{action=Index}/{id?}");
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.Run();

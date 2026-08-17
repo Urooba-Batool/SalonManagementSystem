@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StylOnyx Luxury Salon &mdash; Luxury Beauty Portal</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-deep-dark: #0b0e14;
+            --bg-card-dark: #131924;
+            --teal-primary: #0d9488;
+            --teal-glow: #14b8a6;
+            --teal-light: #2dd4bf;
+            --gold-accent: #d4af37;
+            --gold-light: #fef08a;
+            --border-gold: rgba(212, 175, 55, 0.25);
+            --border-teal: rgba(13, 148, 136, 0.3);
+            --text-heading: #ffffff;
+            --text-body: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            min-height: 100vh;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-deep-dark);
+            color: var(--text-heading);
+            overflow-x: hidden;
+            color-scheme: dark;
+        }
+
+        select {
+            color-scheme: dark;
+            background-color: var(--bg-card-dark);
+            color: #ffffff;
+        }
+
+        select option {
+            background-color: #131924 !important;
+            color: #ffffff !important;
+            padding: 10px 14px;
+        }
+
+        select option:hover,
+        select option:focus,
+        select option:checked {
+            background-color: var(--teal-primary) !important;
+            color: #ffffff !important;
+        }
+
+        /* ── Fullscreen Split Layout ── */
+        .login-viewport {
+            display: flex;
+            min-height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+    </style>
+    @RenderSection("Styles", required: false)
+</head>
+<body>
+
+    <div class="login-viewport">
+        @RenderBody()
+    </div>
+
+    <!-- SweetAlert2 integration -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <text>
+            Swal.fire({
+                icon: 'success',
+                title: 'Welcome Back!',
+                text: '@TempData["SuccessMessage"]',
+                timer: 2500,
+                showConfirmButton: false,
+                background: '#131924',
+                color: '#ffffff',
+                iconColor: '#d4af37'
+            });
+            </text>
+        }
+    </script>
+</body>
+</html>

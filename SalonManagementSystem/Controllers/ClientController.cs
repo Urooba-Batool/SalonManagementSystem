@@ -1,17 +1,16 @@
-﻿using SalonManagementSystem.DAL;
-using SalonManagementSystem.Models;
-using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using SalonManagementSystem.Models;
 
 namespace SalonManagementSystem.Controllers
 {
     public class ClientController : Controller
     {
-        private readonly DBHelper _db;
+        private readonly string _connection;
 
-        public ClientController(DBHelper db)
+        public ClientController(IConfiguration config)
         {
-            _db = db;
+            _connection = config.GetConnectionString("SalonDB") ?? string.Empty;
         }
 
         public IActionResult Index()
@@ -22,13 +21,18 @@ namespace SalonManagementSystem.Controllers
         [HttpPost]
         public IActionResult Add(Client c)
         {
-            SqlParameter[] p =
-            {
-                new SqlParameter("@ClientName", c.ClientName),
-                new SqlParameter("@ClientPhone", c.ClientPhone)
-            };
+            if (string.IsNullOrWhiteSpace(c.ClientName) || string.IsNullOrWhiteSpace(c.ClientPhone))
+                return RedirectToAction("Index");
 
-            _db.Execute("sp_AddClient", p);
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand(
+                    "INSERT INTO clients (ClientName, ClientPhone) VALUES (@name, @phone)", conn);
+                cmd.Parameters.AddWithValue("@name", c.ClientName);
+                cmd.Parameters.AddWithValue("@phone", c.ClientPhone);
+                cmd.ExecuteNonQuery();
+            }
 
             return RedirectToAction("Index");
         }

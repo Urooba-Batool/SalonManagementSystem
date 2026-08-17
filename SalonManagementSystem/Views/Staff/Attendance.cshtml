@@ -1,0 +1,329 @@
+@model List<SalonManagementSystem.Models.AttendanceViewModel>
+@{
+    Layout = "~/Views/Shared/_StaffLayout.cshtml";
+}
+
+@section Styles {
+    <style>
+        .attendance-card-container {
+            max-width: 850px;
+            margin: 20px auto;
+            background: linear-gradient(145deg, #131924 0%, #0e1219 100%);
+            border: 1px solid var(--border-gold);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 16px 45px rgba(0, 0, 0, 0.45);
+            box-sizing: border-box;
+        }
+
+        .attendance-hero-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .attendance-title-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .attendance-icon-badge {
+            width: 48px; height: 48px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--teal-primary), var(--gold-primary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            color: #ffffff;
+            box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
+        }
+
+        .attendance-title-group h2 {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .attendance-title-group p {
+            font-size: 0.82rem;
+            color: var(--text-body);
+        }
+
+        .shift-timer-box {
+            background: rgba(20, 184, 166, 0.12);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+            padding: 8px 18px;
+            border-radius: 50px;
+            color: var(--teal-light);
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-attendance-custom {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 18px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+
+        .form-grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-group-custom {
+            margin-bottom: 16px;
+        }
+
+        .form-label-custom {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .form-input-custom {
+            width: 100%;
+            background: #131924;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #ffffff;
+            font-family: var(--font-sans);
+            font-size: 0.92rem;
+            box-sizing: border-box;
+            color-scheme: dark;
+        }
+
+        select.form-input-custom option {
+            background-color: #131924 !important;
+            color: #ffffff !important;
+            padding: 12px 16px;
+        }
+
+        select.form-input-custom option:hover,
+        select.form-input-custom option:focus,
+        select.form-input-custom option:checked {
+            background-color: #0d9488 !important;
+            color: #ffffff !important;
+        }
+
+        .form-input-custom:focus {
+            outline: none;
+            border-color: var(--teal-glow);
+            box-shadow: 0 0 16px rgba(20, 184, 166, 0.25);
+        }
+
+        .btn-attendance-submit {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(90deg, var(--teal-primary) 0%, var(--gold-primary) 100%);
+            border: none;
+            border-radius: 50px;
+            color: #ffffff;
+            font-size: 1rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(13, 148, 136, 0.35);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-attendance-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(212, 175, 55, 0.45);
+        }
+
+        /* Attendance Data Table */
+        .attendance-table-container {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 18px;
+            padding: 24px;
+            margin-bottom: 32px;
+            overflow-x: auto;
+        }
+
+        .attendance-data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 6px;
+        }
+
+        .attendance-data-table th {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--gold-primary);
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+        }
+
+        .attendance-data-table td {
+            padding: 12px 16px;
+            color: #ffffff;
+            font-size: 0.9rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .badge-present {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            padding: 4px 10px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        @@media (max-width: 600px) {
+            .attendance-hero-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+            .form-grid-2col { grid-template-columns: 1fr; gap: 0; }
+        }
+    </style>
+}
+
+<div class="attendance-card-container">
+    <!-- Alert Banners -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div style="background:rgba(34,197,94,0.18); border:1px solid rgba(34,197,94,0.4); border-radius:14px; padding:12px 18px; color:#4ade80; font-size:0.9rem; font-weight:600; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>@TempData["SuccessMessage"]</span>
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div style="background:rgba(244,63,94,0.18); border:1px solid rgba(244,63,94,0.4); border-radius:14px; padding:12px 18px; color:#fca5a5; font-size:0.9rem; font-weight:600; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>@TempData["ErrorMessage"]</span>
+        </div>
+    }
+
+    <!-- Header -->
+    <div class="attendance-hero-header">
+        <div class="attendance-title-group">
+            <div class="attendance-icon-badge"><i class="fa-solid fa-user-clock"></i></div>
+            <div>
+                <h2>Workstation Shift Attendance</h2>
+                <p>StylOnyx Executive Studio &bull; Daily Clock In / Out Tracker</p>
+            </div>
+        </div>
+
+        <div class="shift-timer-box" style="@(ViewBag.HasActiveShift == true ? "" : "background:rgba(212,175,55,0.12); border-color:rgba(212,175,55,0.3); color:var(--gold-primary);")">
+            <i class="fa-solid fa-circle" style="font-size:0.5rem; color:@(ViewBag.HasActiveShift == true ? "#4ade80" : "#d4af37");"></i> 
+            @(ViewBag.HasActiveShift == true ? "Shift Active (Checked In)" : "Shift Off-Clock")
+        </div>
+    </div>
+
+    <!-- Attendance Form -->
+    <form method="post" asp-action="MarkAttendance" class="form-attendance-custom">
+        <input type="hidden" name="SelectedStaffId" value="@ViewBag.CurrentStaffId" />
+
+        <div class="form-grid-2col">
+            <!-- Logged In Staff Profile Card -->
+            <div class="form-group-custom">
+                <label class="form-label-custom">Logged-In Staff Specialist</label>
+                <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(212,175,55,0.3); border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:12px;">
+                    <i class="fa-solid fa-id-badge" style="color:var(--gold-primary); font-size:1.2rem;"></i>
+                    <div>
+                        <div style="font-weight:700; color:#ffffff; font-size:0.95rem;">@ViewBag.CurrentStaffName</div>
+                        <div style="font-size:0.78rem; color:var(--teal-light);">@ViewBag.CurrentStaffSpeciality</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Type Select -->
+            <div class="form-group-custom">
+                <label class="form-label-custom">Attendance Action Type</label>
+                <select name="Type" class="form-input-custom" required>
+                    @if (ViewBag.HasActiveShift == true)
+                    {
+                        <option value="CheckOut" selected>🌇 Shift Departure (Check-Out)</option>
+                        <option value="CheckIn">🌅 Shift Arrival (Check-In)</option>
+                    }
+                    else
+                    {
+                        <option value="CheckIn" selected>🌅 Shift Arrival (Check-In)</option>
+                        <option value="CheckOut">🌇 Shift Departure (Check-Out)</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-bottom:18px;">
+            <span class="badge-present" style="background:rgba(20,184,166,0.15); color:var(--teal-light); border-color:rgba(20,184,166,0.3);"><i class="fa-solid fa-mug-hot"></i> 15 Min Break Logged</span>
+            <span class="badge-present" style="background:rgba(212,175,55,0.15); color:var(--gold-primary); border-color:rgba(212,175,55,0.3);"><i class="fa-solid fa-bolt"></i> On-Time Check In</span>
+        </div>
+
+        <button type="submit" class="btn-attendance-submit">
+            <i class="fa-solid fa-user-check"></i> @(ViewBag.HasActiveShift == true ? "Clock Out Shift Now" : "Clock In Shift Now")
+        </button>
+    </form>
+
+    <!-- Table Container -->
+    <div class="attendance-table-container">
+        <div style="font-family:var(--font-display); font-size:1.25rem; font-weight:700; color:#fff; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between;">
+            <span><i class="fa-solid fa-list-check" style="color:var(--gold-primary);"></i> Today's Shift Logs</span>
+            <span class="badge-present"><i class="fa-solid fa-check-double"></i> Live Roster</span>
+        </div>
+
+        <table class="attendance-data-table">
+            <thead>
+                <tr>
+                    <th>Staff Specialist</th>
+                    <th>Check In Time</th>
+                    <th>Check Out Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model != null && Model.Count > 0)
+                {
+                    foreach (var item in Model)
+                    {
+                        <tr>
+                            <td style="font-weight:700;">@item.StaffName</td>
+                            <td><span style="color:var(--teal-light); font-weight:600;"><i class="fa-regular fa-clock"></i> @item.CheckIn</span></td>
+                            <td>
+                                @if (item.CheckOut == null)
+                                {
+                                    <span style="color:var(--gold-primary); font-weight:600;"><i class="fa-solid fa-spinner fa-spin"></i> Shift In Progress</span>
+                                }
+                                else
+                                {
+                                    <span style="color:#94a3b8;"><i class="fa-solid fa-right-from-bracket"></i> @item.CheckOut</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="3" style="text-align:center; padding:24px; color:var(--text-body);">
+                            <i class="fa-solid fa-folder-open" style="font-size:2rem; color:var(--gold-primary); margin-bottom:8px; display:block;"></i>
+                            No attendance records logged for today yet.
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
