@@ -1,0 +1,483 @@
+@model SalonManagementSystem.Models.DashboardModel
+@{
+    Layout = "~/Views/Shared/_StaffLayout.cshtml";
+    var userName = Context.Session.GetString("UserName") ?? "Specialist";
+}
+
+@section Styles {
+    <style>
+        /* ── Staff Hero Welcome Banner ── */
+        .staff-hero-banner {
+            background: linear-gradient(135deg, rgba(19, 25, 36, 0.95) 0%, rgba(11, 14, 20, 0.98) 100%);
+            border: 1px solid var(--border-gold);
+            border-radius: 24px;
+            padding: 32px;
+            margin-bottom: 32px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .staff-hero-banner::before {
+            content: '';
+            position: absolute;
+            top: -40%; right: -5%;
+            width: 320px; height: 320px;
+            background: radial-gradient(circle, rgba(20, 184, 166, 0.18) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-profile-group {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 2;
+        }
+
+        .hero-avatar-badge {
+            width: 64px; height: 64px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--teal-primary), var(--gold-primary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 1.8rem;
+            font-weight: 800;
+            border: 2px solid var(--gold-primary);
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.35);
+        }
+
+        .hero-text-content h1 {
+            font-family: var(--font-display);
+            font-size: 1.85rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hero-text-content p {
+            font-size: 0.9rem;
+            color: var(--text-body);
+        }
+
+        .hero-clock-widget {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(212, 175, 55, 0.25);
+            padding: 12px 20px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            z-index: 2;
+        }
+
+        .clock-time {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gold-accent);
+        }
+
+        .clock-date {
+            font-size: 0.78rem;
+            color: var(--teal-light);
+        }
+
+        .btn-action-hero {
+            background: linear-gradient(90deg, var(--teal-primary), var(--gold-primary));
+            color: #ffffff;
+            padding: 10px 22px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
+            transition: all 0.3s ease;
+        }
+
+        .btn-action-hero:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(212, 175, 55, 0.45);
+            color: #ffffff;
+        }
+
+        /* ── Metric KPI Cards Grid ── */
+        .staff-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .staff-kpi-card {
+            background: rgba(19, 25, 36, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border-gold);
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            transition: all 0.35s ease;
+        }
+
+        .staff-kpi-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--teal-glow);
+            box-shadow: 0 14px 35px rgba(20, 184, 166, 0.25);
+        }
+
+        .kpi-text-info .kpi-number {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+
+        .kpi-text-info .kpi-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-body);
+        }
+
+        .kpi-icon-badge {
+            width: 52px; height: 52px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            flex-shrink: 0;
+        }
+
+        .icon-appts { background: rgba(20, 184, 166, 0.15); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.3); }
+        .icon-sales { background: rgba(212, 175, 55, 0.15); color: #d4af37; border: 1px solid rgba(212, 175, 55, 0.3); }
+        .icon-scheduled { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .icon-services { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+
+        /* ── Shift Schedule Timeline ── */
+        .timeline-card {
+            background: rgba(19, 25, 36, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border-gold);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            margin-bottom: 32px;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-item:hover {
+            border-color: var(--gold-primary);
+            background: rgba(212, 175, 55, 0.05);
+            transform: translateX(4px);
+        }
+
+        .time-badge {
+            font-family: var(--font-display);
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--gold-accent);
+            background: rgba(212, 175, 55, 0.12);
+            padding: 6px 14px;
+            border-radius: 50px;
+            border: 1px solid rgba(212, 175, 55, 0.25);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .client-info h4 { font-size: 0.95rem; font-weight: 700; color: #ffffff; }
+        .client-info p { font-size: 0.8rem; color: var(--text-body); }
+
+        .service-tag-pill {
+            background: rgba(20, 184, 166, 0.15);
+            color: var(--teal-light);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        /* ── Staff Action Hub Grid ── */
+        .action-hub-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .action-hub-card {
+            background: rgba(19, 25, 36, 0.6);
+            border: 1px solid var(--border-gold);
+            border-radius: 16px;
+            padding: 18px;
+            text-decoration: none;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .action-hub-card:hover {
+            background: rgba(212, 175, 55, 0.12);
+            border-color: var(--gold-primary);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(212, 175, 55, 0.2);
+        }
+
+        .action-hub-icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--teal-primary), var(--gold-primary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .action-hub-info h5 { font-size: 0.9rem; font-weight: 700; margin-bottom: 2px; }
+        .action-hub-info p { font-size: 0.76rem; color: var(--text-body); }
+
+        /* ── Chart Panel Card ── */
+        .staff-chart-card {
+            background: rgba(19, 25, 36, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border-gold);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            margin-bottom: 32px;
+        }
+
+        .chart-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .chart-card-title {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chart-card-subtitle { font-size: 0.82rem; color: var(--text-body); }
+
+        @@media (max-width: 992px) {
+            .staff-hero-banner { flex-direction: column; align-items: flex-start; gap: 20px; padding: 24px; }
+            .hero-clock-widget { width: 100%; justify-content: space-between; }
+            .staff-kpi-grid, .action-hub-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @@media (max-width: 576px) {
+            .staff-kpi-grid, .action-hub-grid { grid-template-columns: 1fr; }
+            .timeline-item { flex-direction: column; align-items: flex-start; gap: 12px; }
+        }
+    </style>
+}
+
+@{
+    var rawStaffName = ViewBag.StaffName as string ?? ViewData["StaffName"] as string ?? Context.Session.GetString("UserName");
+    var displayStaffName = !string.IsNullOrWhiteSpace(rawStaffName) && rawStaffName != "Staff Member" ? rawStaffName : "Specialist";
+    var avatarLetter = !string.IsNullOrWhiteSpace(displayStaffName) ? displayStaffName.Trim().Substring(0, 1).ToUpper() : "S";
+}
+
+<!-- ── Staff Hero Welcome Banner ── -->
+<div class="staff-hero-banner">
+    <div class="hero-profile-group">
+        <div class="hero-avatar-badge">@avatarLetter</div>
+        <div class="hero-text-content">
+            <h1>Welcome Back, @displayStaffName <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--gold-primary); font-size:1.4rem;"></i></h1>
+            <p>StylOnyx Executive Studio &bull; Master Specialist Workstation</p>
+        </div>
+    </div>
+
+
+    <div class="hero-clock-widget">
+        <div>
+            <div class="clock-time" id="liveClockTime">12:00:00 PM</div>
+            <div class="clock-date" id="liveClockDate">Saturday, August 8, 2026</div>
+        </div>
+        <a href="/Staff/BookAppointment" class="btn-action-hero">
+            <i class="fa-solid fa-plus"></i> New Booking
+        </a>
+    </div>
+</div>
+
+<!-- ── Staff Quick Action Hub Grid ── -->
+<div class="action-hub-grid">
+    <a href="/Staff/BookAppointment" class="action-hub-card">
+        <div class="action-hub-icon"><i class="fa-solid fa-calendar-plus"></i></div>
+        <div class="action-hub-info">
+            <h5>Book Appointment</h5>
+            <p>Schedule client slot</p>
+        </div>
+    </a>
+    <a href="/Staff/GenerateBill" class="action-hub-card">
+        <div class="action-hub-icon" style="background:linear-gradient(135deg, #d4af37, #c2410c);"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+        <div class="action-hub-info">
+            <h5>Generate Bill</h5>
+            <p>Create client receipt</p>
+        </div>
+    </a>
+    <a href="/Staff/Attendance" class="action-hub-card">
+        <div class="action-hub-icon" style="background:linear-gradient(135deg, #0d9488, #16a34a);"><i class="fa-solid fa-clock"></i></div>
+        <div class="action-hub-info">
+            <h5>Mark Attendance</h5>
+            <p>Clock in / out shift</p>
+        </div>
+    </a>
+    <a href="/Staff/GenerateBill" class="action-hub-card">
+        <div class="action-hub-icon" style="background:linear-gradient(135deg, #7c3aed, #0d9488);"><i class="fa-solid fa-list"></i></div>
+        <div class="action-hub-info">
+            <h5>Services Price List</h5>
+            <p>View active catalog</p>
+        </div>
+    </a>
+</div>
+
+<!-- ── Staff Personal KPI Metric Cards Grid ── -->
+<div class="staff-kpi-grid">
+    <div class="staff-kpi-card">
+        <div class="kpi-text-info">
+            <div class="kpi-number">@Model.OwnTodayCount</div>
+            <div class="kpi-title">My Today's Sessions</div>
+        </div>
+        <div class="kpi-icon-badge icon-appts"><i class="fa-solid fa-calendar-check"></i></div>
+    </div>
+
+    <div class="staff-kpi-card">
+        <div class="kpi-text-info">
+            <div class="kpi-number">@Model.CompletedCount</div>
+            <div class="kpi-title">Completed Sessions</div>
+        </div>
+        <div class="kpi-icon-badge icon-services"><i class="fa-solid fa-circle-check"></i></div>
+    </div>
+
+    <div class="staff-kpi-card">
+        <div class="kpi-text-info">
+            <div class="kpi-number">@Model.PendingCount</div>
+            <div class="kpi-title">Pending Sessions</div>
+        </div>
+        <div class="kpi-icon-badge icon-scheduled"><i class="fa-solid fa-hourglass-half"></i></div>
+    </div>
+
+    <div class="staff-kpi-card">
+        <div class="kpi-text-info">
+            <div class="kpi-number">PKR @Model.OwnTodayEarnings.ToString("N0")</div>
+            <div class="kpi-title">My Today's Earnings</div>
+        </div>
+        <div class="kpi-icon-badge icon-sales"><i class="fa-solid fa-sack-dollar"></i></div>
+    </div>
+</div>
+
+<!-- ── Shift Schedule Timeline Container ── -->
+<div class="timeline-card">
+    <div class="chart-card-header">
+        <div>
+            <div class="chart-card-title"><i class="fa-solid fa-list-check" style="color:var(--gold-primary);"></i> Shift Roster & Station Timeline</div>
+            <div class="chart-card-subtitle">Active client appointments scheduled for your booth today</div>
+        </div>
+        <a href="/Staff/BookAppointment" style="color:var(--gold-primary); text-decoration:none; font-size:0.85rem; font-weight:700;">
+            <i class="fa-solid fa-plus-circle"></i> Add Client
+        </a>
+    </div>
+
+    @if (ViewBag.TodayTimeline != null && ((IEnumerable<dynamic>)ViewBag.TodayTimeline).Any())
+    {
+        foreach (var item in ViewBag.TodayTimeline)
+        {
+            <div class="timeline-item">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div class="time-badge"><i class="fa-regular fa-clock"></i> @item.AppTimeStr</div>
+                    <div class="client-info">
+                        <h4>@item.ClientName &bull; <span style="color:var(--teal-light); font-size:0.82rem;">Station</span></h4>
+                        <p>@item.ServiceName</p>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    @if (item.Status == "Completed")
+                    {
+                        <span class="service-tag-pill" style="background:rgba(34,197,94,0.18); color:#4ade80; border-color:rgba(34,197,94,0.35);"><i class="fa-solid fa-check-double"></i> Completed</span>
+                    }
+                    else if (item.Status == "Confirmed")
+                    {
+                        <span class="service-tag-pill" style="background:rgba(20,184,166,0.18); color:var(--teal-light); border-color:rgba(20,184,166,0.35);"><i class="fa-solid fa-calendar-check"></i> Confirmed</span>
+                    }
+                    else
+                    {
+                        <span class="service-tag-pill" style="background:rgba(212,175,55,0.18); color:var(--gold-primary); border-color:rgba(212,175,55,0.35);"><i class="fa-regular fa-clock"></i> Scheduled</span>
+                    }
+                    <a href="/Staff/GenerateBill" class="btn-action-hero" style="padding:6px 14px; font-size:0.78rem;">Generate Bill</a>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div style="text-align:center; padding:36px 20px; background:rgba(255,255,255,0.02); border:1px dashed rgba(212,175,55,0.25); border-radius:16px;">
+            <i class="fa-solid fa-calendar-xmark" style="font-size:2.4rem; color:var(--gold-primary); margin-bottom:12px; display:block;"></i>
+            <div style="font-weight:700; font-size:1.05rem; color:#ffffff; margin-bottom:4px;">No Client Appointments Scheduled Today</div>
+            <p style="font-size:0.85rem; color:var(--text-body); margin-bottom:16px;">There are no active shift appointments booked for your station today.</p>
+            <a href="/Staff/BookAppointment" class="btn-action-hero" style="font-size:0.82rem; padding:8px 20px;">
+                <i class="fa-solid fa-plus"></i> Schedule New Client Appointment
+            </a>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        function updateLiveClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            const clockTimeEl = document.getElementById('liveClockTime');
+            const clockDateEl = document.getElementById('liveClockDate');
+            if (clockTimeEl) clockTimeEl.innerText = timeStr;
+            if (clockDateEl) clockDateEl.innerText = dateStr;
+        }
+        setInterval(updateLiveClock, 1000);
+        updateLiveClock();
+    </script>
+}

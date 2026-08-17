@@ -1,0 +1,362 @@
+@model SalonManagementSystem.Models.AppointmentViewModel
+@{
+    Layout = "~/Views/Shared/_StaffLayout.cshtml";
+}
+
+@section Styles {
+    <style>
+        .booking-card-container {
+            max-width: 720px;
+            margin: 20px auto;
+            background: linear-gradient(145deg, #131924 0%, #0e1219 100%);
+            border: 1px solid var(--border-gold);
+            border-radius: 24px;
+            padding: 36px;
+            box-shadow: 0 16px 45px rgba(0, 0, 0, 0.45);
+            position: relative;
+        }
+
+        .booking-card-container::before {
+            content: '';
+            position: absolute;
+            top: 16px; left: 16px; bottom: 16px; right: 16px;
+            border: 1px solid rgba(212, 175, 55, 0.12);
+            border-radius: 18px;
+            pointer-events: none;
+        }
+
+        .booking-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .booking-header-icon {
+            width: 52px; height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--teal-primary), var(--gold-primary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            color: #ffffff;
+            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.35);
+        }
+
+        .booking-header-text h2 {
+            font-family: var(--font-display);
+            font-size: 1.65rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .booking-header-text p {
+            font-size: 0.84rem;
+            color: var(--text-body);
+        }
+
+        /* Booking Stepper Bar */
+        .stepper-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            padding: 12px 20px;
+            border-radius: 50px;
+        }
+
+        .step-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .step-pill.active {
+            color: var(--gold-primary);
+        }
+
+        .step-number {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72rem;
+        }
+
+        .step-pill.active .step-number {
+            background: linear-gradient(135deg, var(--teal-primary), var(--gold-primary));
+            color: #ffffff;
+        }
+
+        .form-grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-group-custom {
+            margin-bottom: 20px;
+        }
+
+        .form-label-custom {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .form-input-wrapper {
+            position: relative;
+        }
+
+        .form-input-wrapper i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gold-primary);
+            font-size: 0.95rem;
+        }
+
+        .form-input-wrapper input, .form-input-wrapper select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 13px 16px 13px 44px;
+            color: #ffffff;
+            font-family: var(--font-sans);
+            font-size: 0.92rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .form-input-wrapper input:focus, .form-input-wrapper select:focus {
+            outline: none;
+            border-color: var(--teal-glow);
+            background: rgba(20, 184, 166, 0.08);
+            box-shadow: 0 0 18px rgba(20, 184, 166, 0.25);
+        }
+
+        .pricing-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(212, 175, 55, 0.08);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            padding: 16px 22px;
+            border-radius: 14px;
+            margin-bottom: 24px;
+        }
+
+        .btn-submit-booking {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(90deg, var(--teal-primary) 0%, var(--gold-primary) 100%);
+            border: none;
+            border-radius: 50px;
+            color: #ffffff;
+            font-size: 1.05rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(13, 148, 136, 0.4);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-submit-booking:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(212, 175, 55, 0.5);
+        }
+
+        /* Treatment Addon Chips */
+        .addon-chips-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--teal-light);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .addon-chips-grid {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .addon-chip-item {
+            background: rgba(20, 184, 166, 0.1);
+            border: 1px solid rgba(20, 184, 166, 0.25);
+            color: #ffffff;
+            padding: 6px 14px;
+            border-radius: 50px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .addon-chip-item:hover, .addon-chip-item.active {
+            background: var(--teal-primary);
+            border-color: var(--teal-glow);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+        }
+    </style>
+}
+
+<div class="booking-card-container">
+    <div class="booking-header">
+        <div class="booking-header-icon"><i class="fa-solid fa-calendar-plus"></i></div>
+        <div class="booking-header-text">
+            <h2>Book Client Appointment</h2>
+            <p>StylOnyx Executive Studio &bull; Workstation Appointment Booking</p>
+        </div>
+    </div>
+
+    <!-- Stepper Bar -->
+    <div class="stepper-bar">
+        <div class="step-pill active"><span class="step-number">1</span> Client Details</div>
+        <div class="step-pill active"><span class="step-number">2</span> Date & Slot</div>
+        <div class="step-pill active"><span class="step-number">3</span> Service & Staff</div>
+        <div class="step-pill"><span class="step-number">4</span> Receipt</div>
+    </div>
+
+    <form method="post">
+        <div class="form-grid-2col">
+            <div class="form-group-custom">
+                <label class="form-label-custom">Client Full Name</label>
+                <div class="form-input-wrapper">
+                    <i class="fa-solid fa-user"></i>
+                    <input asp-for="ClientName" placeholder="Enter client full name" required />
+                </div>
+            </div>
+
+            <div class="form-group-custom">
+                <label class="form-label-custom">Client Contact Phone</label>
+                <div class="form-input-wrapper">
+                    <i class="fa-solid fa-phone"></i>
+                    <input asp-for="ClientPhone" placeholder="0300-1234567" required />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-grid-2col">
+            <div class="form-group-custom">
+                <label class="form-label-custom">Appointment Date</label>
+                <div class="form-input-wrapper">
+                    <i class="fa-solid fa-calendar"></i>
+                    <input asp-for="AppDate" type="date" required />
+                </div>
+            </div>
+
+            <div class="form-group-custom">
+                <label class="form-label-custom">Appointment Time</label>
+                <div class="form-input-wrapper">
+                    <i class="fa-solid fa-clock"></i>
+                    <input asp-for="AppTime" type="time" required />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-grid-2col">
+            <div class="form-group-custom">
+                <label class="form-label-custom">Assigned Staff Specialist</label>
+                <div class="form-input-wrapper">
+                    <i class="fa-solid fa-user-gear"></i>
+                    <select asp-for="BookedForId" asp-items="Model.StaffList" required>
+                        <option value="">Select Staff Specialist</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group-custom">
+                <label class="form-label-custom">Booked By (Staff Member)</label>
+                <div class="form-input-wrapper">
+                    <i class="fa-solid fa-clipboard-user"></i>
+                    <select asp-for="BookedById" asp-items="Model.StaffList" required>
+                        <option value="">Select Booked By Staff</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group-custom">
+            <label class="form-label-custom">Salon Treatment Service</label>
+            <div class="form-input-wrapper">
+                <i class="fa-solid fa-scissors"></i>
+                <select asp-for="SelectedServiceId" asp-items="Model.Services" id="serviceSelect" required>
+                    <option value="">Select Salon Service</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- VIP Addon Treatment Chips -->
+        <div class="addon-chips-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Quick Treatment Add-ons</div>
+        <div class="addon-chips-grid">
+            <span class="addon-chip-item" onclick="this.classList.toggle('active')">+ Organic Glossing</span>
+            <span class="addon-chip-item" onclick="this.classList.toggle('active')">+ Scalp Detox Revive</span>
+            <span class="addon-chip-item" onclick="this.classList.toggle('active')">+ VIP Botanical Oil</span>
+        </div>
+
+        <div class="pricing-box" style="flex-direction:column; align-items:stretch; gap:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-weight:700; color:#e2e8f0; font-size:1.02rem;">Estimated Total Price:</span>
+                <span style="font-family:var(--font-display); font-size:1.75rem; font-weight:800; color:var(--gold-primary);">
+                    PKR <span id="total">0</span>
+                </span>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:4px;">
+                <input type="text" id="voucherCode" placeholder="Enter VIP Voucher (e.g. VIP15)" style="flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(212,175,55,0.25); border-radius:8px; padding:8px 12px; color:#fff; font-size:0.82rem;" />
+                <button type="button" onclick="applyVoucher()" style="background:var(--teal-primary); color:#fff; border:none; border-radius:8px; padding:8px 16px; font-weight:700; font-size:0.8rem; cursor:pointer;">Apply</button>
+            </div>
+            <div id="voucherMsg" style="font-size:0.78rem; color:#2dd4bf; display:none;"><i class="fa-solid fa-circle-check"></i> VIP 15% Voucher Applied!</div>
+        </div>
+
+        <button type="submit" class="btn-submit-booking">
+            <i class="fa-solid fa-receipt"></i> Save & Generate Bill
+        </button>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        let basePrice = 0;
+        document.getElementById("serviceSelect").addEventListener("change", function () {
+            var serviceId = this.value;
+            fetch('/Staff/GetServicePrice?serviceId=' + serviceId)
+                .then(response => response.json())
+                .then(data => {
+                    basePrice = Number(data);
+                    document.getElementById("total").innerText = basePrice.toLocaleString();
+                });
+        });
+
+        function applyVoucher() {
+            const code = document.getElementById("voucherCode").value.trim();
+            if (code.toUpperCase() === 'VIP15') {
+                const discounted = Math.round(basePrice * 0.85);
+                document.getElementById("total").innerText = discounted.toLocaleString();
+                document.getElementById("voucherMsg").style.display = 'block';
+            }
+        }
+    </script>
+}

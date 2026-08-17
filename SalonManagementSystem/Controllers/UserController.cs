@@ -1,0 +1,1018 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using SalonManagementSystem.Models;
+
+namespace SalonManagementSystem.Controllers
+{
+    public class UserController : Controller
+    {
+        private readonly string _connection;
+
+        public UserController(IConfiguration config)
+        {
+            _connection = config.GetConnectionString("SalonDB") ?? string.Empty;
+        }
+
+        protected bool EnsureUserAuthorized(out int userId, out string userName)
+        {
+            userId = HttpContext.Session.GetInt32("UserID") ?? 0;
+            userName = HttpContext.Session.GetString("UserName") ?? string.Empty;
+            string role = HttpContext.Session.GetString("Role") ?? string.Empty;
+
+            if (userId <= 0 || !role.Equals("User", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        protected int GetLoggedInClientId(SqlConnection conn, int userId, string userName)
+        {
+            // 1. Try finding client by UsId link
+            SqlCommand cmdUsId = new SqlCommand("SELECT TOP 1 ClientId FROM clients WHERE UsId = @uid", conn);
+            cmdUsId.Parameters.AddWithValue("@uid", userId);
+            object? resUsId = cmdUsId.ExecuteScalar();
+
+            if (resUsId != null && resUsId != DBNull.Value)
+            {
+                return Convert.ToInt32(resUsId);
+            }
+
+            // 2. Try finding client by ClientName matching UserName
+            SqlCommand cmdName = new SqlCommand("SELECT TOP 1 ClientId FROM clients WHERE ClientName = @name", conn);
+            cmdName.Parameters.AddWithValue("@name", userName);
+            object? resName = cmdName.ExecuteScalar();
+
+            if (resName != null && resName != DBNull.Value)
+            {
+                int cId = Convert.ToInt32(resName);
+                // Link UsId for future fast lookups
+                SqlCommand updateLink = new SqlCommand("UPDATE clients SET UsId = @uid WHERE ClientId = @cid", conn);
+                updateLink.Parameters.AddWithValue("@uid", userId);
+                updateLink.Parameters.AddWithValue("@cid", cId);
+                updateLink.ExecuteNonQuery();
+                return cId;
+            }
+
+            // 3. Fallback: Auto-create Client entry linked to UserID
+            SqlCommand createCmd = new SqlCommand(@"
+                INSERT INTO clients (UsId, ClientName, ClientPhone) 
+                VALUES (@uid, @name, '03000000000');
+                SELECT SCOPE_IDENTITY();", conn);
+            createCmd.Parameters.AddWithValue("@uid", userId);
+            createCmd.Parameters.AddWithValue("@name", string.IsNullOrWhiteSpace(userName) ? "Valued Client" : userName);
+            return Convert.ToInt32(createCmd.ExecuteScalar());
+        }
+
+        protected bool CheckUpcomingReminders(SqlConnection conn, int clientId)
+        {
+            DateTime now = DateTime.Now;
+            DateTime cutoff = now.AddHours(24);
+
+            SqlCommand cmd = new SqlCommand(@"
+                SELECT COUNT(*) FROM appointments 
+                WHERE CId = @cid 
+                  AND AppStatus IN (1, 3) 
+                  AND (CAST(AppDate AS DATETIME) + CAST(AppTime AS DATETIME)) >= @now 
+                  AND (CAST(AppDate AS DATETIME) + CAST(AppTime AS DATETIME)) <= @cutoff", conn);
+
+            cmd.Parameters.AddWithValue("@cid", clientId);
+            cmd.Parameters.AddWithValue("@now", now);
+            cmd.Parameters.AddWithValue("@cutoff", cutoff);
+
+            int count = Convert.ToInt32(cmd.ExecuteScalar());
+            bool hasReminder = count > 0;
+            ViewBag.HasUpcomingReminder = hasReminder;
+            return hasReminder;
+        }
+
+        public IActionResult Index()
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            UserDashboardViewModel model = new UserDashboardViewModel
+            {
+                UserName = userName,
+                FullName = userName
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+                CheckUpcomingReminders(conn, clientId);
+
+
+                // Fetch Client Full Name
+                SqlCommand cNameCmd = new SqlCommand("SELECT ClientName FROM clients WHERE ClientId = @cid", conn);
+                cNameCmd.Parameters.AddWithValue("@cid", clientId);
+                object? cNameObj = cNameCmd.ExecuteScalar();
+                if (cNameObj != null && cNameObj != DBNull.Value)
+                {
+                    model.FullName = cNameObj.ToString()!;
+                }
+
+                // Booking Metrics
+                SqlCommand totalCmd = new SqlCommand("SELECT COUNT(*) FROM appointments WHERE CId = @cid", conn);
+                totalCmd.Parameters.AddWithValue("@cid", clientId);
+                model.TotalBookingsCount = (int)totalCmd.ExecuteScalar();
+
+                SqlCommand compCmd = new SqlCommand("SELECT COUNT(*) FROM appointments WHERE CId = @cid AND AppStatus = 4", conn);
+                compCmd.Parameters.AddWithValue("@cid", clientId);
+                model.CompletedBookingsCount = (int)compCmd.ExecuteScalar();
+
+                SqlCommand actCmd = new SqlCommand("SELECT COUNT(*) FROM appointments WHERE CId = @cid AND AppStatus IN (1, 3)", conn);
+                actCmd.Parameters.AddWithValue("@cid", clientId);
+                model.ActiveBookingsCount = (int)actCmd.ExecuteScalar();
+
+                // Fetch All Appointments for History Preview and Upcoming Search
+                string query = @"
+                    SELECT a.AppId, a.AppDate, a.AppTime, a.AppStatus, 
+                           s.StaffId, ISNULL(s.StaffName, 'Assigned Stylist') AS StaffName, ISNULL(s.StaffSpecialilty, 'Specialist') AS StaffSpecialilty,
+                           srv.ServiceId, ISNULL(srv.ServiceName, 'Salon Service') AS ServiceName, ISNULL(srv.ServicePrice, 0) AS ServicePrice,
+                           act.StatusType
+                    FROM appointments a
+                    LEFT JOIN staff s ON a.App_Booked_For = s.StaffId
+                    LEFT JOIN appointmentservices aps ON a.AppId = aps.ApId
+                    LEFT JOIN salonservices srv ON aps.SeId = srv.ServiceId
+                    LEFT JOIN activestatus act ON a.AppStatus = act.StatusId
+                    WHERE a.CId = @cid
+                    ORDER BY a.AppDate DESC, a.AppTime DESC";
+
+                List<UserAppointmentViewModel> allApps = new List<UserAppointmentViewModel>();
+                using (SqlCommand cmd = new SqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", clientId);
+                    using var r = cmd.ExecuteReader();
+                    while (r.Read())
+                    {
+                        DateTime appDate = Convert.ToDateTime(r["AppDate"]);
+                        TimeSpan appTime = (TimeSpan)r["AppTime"];
+                        int status = Convert.ToInt32(r["AppStatus"]);
+                        string statusType = r["StatusType"] != DBNull.Value ? r["StatusType"].ToString()! : "Scheduled";
+
+                        string badgeClass = status switch
+                        {
+                            3 => "badge-scheduled",
+                            4 => "badge-completed",
+                            5 => "badge-cancelled",
+                            _ => "badge-pending"
+                        };
+
+                        allApps.Add(new UserAppointmentViewModel
+                        {
+                            AppId = Convert.ToInt32(r["AppId"]),
+                            StaffId = r["StaffId"] != DBNull.Value ? Convert.ToInt32(r["StaffId"]) : 0,
+                            StaffName = r["StaffName"].ToString()!,
+                            StaffSpeciality = r["StaffSpecialilty"].ToString()!,
+                            ServiceId = r["ServiceId"] != DBNull.Value ? Convert.ToInt32(r["ServiceId"]) : 0,
+                            ServiceName = r["ServiceName"].ToString()!,
+                            ServicePrice = Convert.ToDecimal(r["ServicePrice"]),
+                            AppDate = appDate,
+                            AppTime = appTime,
+                            DisplayTime = DateTime.Today.Add(appTime).ToString("hh:mm tt"),
+                            AppStatus = status,
+                            StatusName = statusType,
+                            StatusBadgeClass = badgeClass
+                        });
+                    }
+                }
+
+                model.RecentAppointments = allApps.Take(5).ToList();
+
+                // Find next upcoming appointment
+                DateTime now = DateTime.Now;
+                model.UpcomingAppointment = allApps
+                    .Where(x => (x.AppStatus == 1 || x.AppStatus == 3) && (x.AppDate.Date + x.AppTime) >= now)
+                    .OrderBy(x => x.AppDate.Date + x.AppTime)
+                    .FirstOrDefault();
+
+                if (model.UpcomingAppointment != null)
+                {
+                    DateTime appDateTime = model.UpcomingAppointment.AppDate.Date + model.UpcomingAppointment.AppTime;
+                    if ((appDateTime - now).TotalHours <= 24 && (appDateTime - now).TotalHours >= 0)
+                    {
+                        model.HasUpcomingReminder = true;
+                        ViewBag.HasUpcomingReminder = true;
+                    }
+                }
+
+                // Fetch Recommended Services
+                SqlCommand rServiceCmd = new SqlCommand("SELECT TOP 4 ServiceId, ServiceName, ServicePrice, ServiceTime, ServiceStatus FROM salonservices WHERE ServiceStatus = 1", conn);
+                using var sr = rServiceCmd.ExecuteReader();
+                while (sr.Read())
+                {
+                    model.RecommendedServices.Add(new SalonService
+                    {
+                        ServiceId = Convert.ToInt32(sr["ServiceId"]),
+                        ServiceName = sr["ServiceName"].ToString()!,
+                        ServicePrice = Convert.ToDecimal(sr["ServicePrice"]),
+                        ServiceTime = sr["ServiceTime"] != DBNull.Value ? (TimeSpan)sr["ServiceTime"] : TimeSpan.FromMinutes(30),
+                        ServiceStatus = Convert.ToInt32(sr["ServiceStatus"])
+                    });
+                }
+            }
+
+            return View(model);
+        }
+
+        [HttpGet]
+        public IActionResult Profile()
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            UserProfileViewModel model = new UserProfileViewModel
+            {
+                UserId = userId,
+                UserName = userName
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+                model.ClientId = clientId;
+
+                SqlCommand cmd = new SqlCommand("SELECT ClientName, ClientPhone FROM clients WHERE ClientId = @cid", conn);
+                cmd.Parameters.AddWithValue("@cid", clientId);
+                using var r = cmd.ExecuteReader();
+                if (r.Read())
+                {
+                    model.FullName = r["ClientName"].ToString()!;
+                    model.Phone = r["ClientPhone"].ToString()!;
+                }
+
+                model.Email = userName.Contains("@") ? userName : userName + "@salon.com";
+            }
+
+            return View(model);
+        }
+
+        [HttpPost]
+        public IActionResult Profile(UserProfileViewModel model)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.FullName))
+            {
+                ViewBag.Error = "Full Name cannot be empty.";
+                return View(model);
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+
+                SqlCommand cmd = new SqlCommand("UPDATE clients SET ClientName = @name, ClientPhone = @phone WHERE ClientId = @cid", conn);
+                cmd.Parameters.AddWithValue("@name", model.FullName.Trim());
+                cmd.Parameters.AddWithValue("@phone", string.IsNullOrWhiteSpace(model.Phone) ? "03000000000" : model.Phone.Trim());
+                cmd.Parameters.AddWithValue("@cid", clientId);
+                cmd.ExecuteNonQuery();
+
+                HttpContext.Session.SetString("UserName", model.FullName.Trim());
+            }
+
+            TempData["SuccessMessage"] = "Profile details updated successfully!";
+            return RedirectToAction("Profile");
+        }
+
+        [HttpPost]
+        public IActionResult ChangePassword(ChangePasswordViewModel model)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            if (!ModelState.IsValid)
+            {
+                TempData["ErrorMessage"] = "Please provide valid current and new password details.";
+                return RedirectToAction("Profile");
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+
+                SqlCommand checkCmd = new SqlCommand("SELECT UserPassword FROM users WHERE UserID = @uid", conn);
+                checkCmd.Parameters.AddWithValue("@uid", userId);
+                object? currentPassObj = checkCmd.ExecuteScalar();
+
+                string currentPassInDb = currentPassObj != null && currentPassObj != DBNull.Value ? currentPassObj.ToString()! : string.Empty;
+
+                if (!currentPassInDb.Equals(model.CurrentPassword.Trim()))
+                {
+                    TempData["ErrorMessage"] = "Current password is incorrect.";
+                    return RedirectToAction("Profile");
+                }
+
+                SqlCommand updateCmd = new SqlCommand("UPDATE users SET UserPassword = @newPass WHERE UserID = @uid", conn);
+                updateCmd.Parameters.AddWithValue("@newPass", model.NewPassword.Trim());
+                updateCmd.Parameters.AddWithValue("@uid", userId);
+                updateCmd.ExecuteNonQuery();
+            }
+
+            TempData["SuccessMessage"] = "Password changed successfully!";
+            return RedirectToAction("Profile");
+        }
+
+        [HttpGet]
+        public IActionResult Services()
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            List<SalonService> services = new List<SalonService>();
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+
+                SqlCommand cmd = new SqlCommand(@"
+                    SELECT ServiceId, ServiceName, ServicePrice, ServiceTime, ServiceStatus 
+                    FROM salonservices 
+                    WHERE ServiceStatus = 1
+                    ORDER BY ServiceName ASC", conn);
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    services.Add(new SalonService
+                    {
+                        ServiceId = Convert.ToInt32(reader["ServiceId"]),
+                        ServiceName = reader["ServiceName"].ToString()!,
+                        ServicePrice = Convert.ToDecimal(reader["ServicePrice"]),
+                        ServiceTime = reader["ServiceTime"] != DBNull.Value ? (TimeSpan)reader["ServiceTime"] : TimeSpan.FromMinutes(30),
+                        ServiceStatus = Convert.ToInt32(reader["ServiceStatus"])
+                    });
+                }
+            }
+
+            return View(services);
+        }
+
+        [HttpGet]
+        public IActionResult Staff()
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            List<dynamic> staffList = new List<dynamic>();
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+
+                SqlCommand cmd = new SqlCommand(@"
+                    SELECT StaffId, StaffName, ISNULL(StaffSpecialilty, 'Hair & Beauty Specialist') AS StaffSpecialilty, StaffPhone, StaffEmail, JoiningDate 
+                    FROM staff 
+                    WHERE StaffStatus = 1
+                    ORDER BY StaffName ASC", conn);
+
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    staffList.Add(new
+                    {
+                        StaffId = Convert.ToInt32(r["StaffId"]),
+                        StaffName = r["StaffName"].ToString()!,
+                        StaffSpeciality = r["StaffSpecialilty"].ToString()!,
+                        StaffPhone = r["StaffPhone"].ToString()!,
+                        StaffEmail = r["StaffEmail"].ToString()!,
+                        JoiningDate = r["JoiningDate"] != DBNull.Value ? Convert.ToDateTime(r["JoiningDate"]).ToString("MMM yyyy") : "N/A"
+                    });
+                }
+            }
+
+            return View(staffList);
+        }
+
+        [HttpGet]
+        public IActionResult BookAppointment(int? serviceId = null, int? staffId = null)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            BookAppointmentViewModel model = new BookAppointmentViewModel
+            {
+                SelectedServiceId = serviceId ?? 0,
+                SelectedStaffId = staffId ?? 0,
+                AppDate = DateTime.Today
+            };
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+
+                // Fetch Available Services
+                SqlCommand sCmd = new SqlCommand("SELECT ServiceId, ServiceName, ServicePrice, ServiceTime FROM salonservices WHERE ServiceStatus = 1 ORDER BY ServiceName ASC", conn);
+                using var sr = sCmd.ExecuteReader();
+                while (sr.Read())
+                {
+                    model.AvailableServices.Add(new SalonService
+                    {
+                        ServiceId = Convert.ToInt32(sr["ServiceId"]),
+                        ServiceName = sr["ServiceName"].ToString()!,
+                        ServicePrice = Convert.ToDecimal(sr["ServicePrice"]),
+                        ServiceTime = sr["ServiceTime"] != DBNull.Value ? (TimeSpan)sr["ServiceTime"] : TimeSpan.FromMinutes(30)
+                    });
+                }
+                sr.Close();
+
+                // Fetch Available Active Staff
+                SqlCommand stCmd = new SqlCommand("SELECT StaffId, StaffName, ISNULL(StaffSpecialilty, 'Specialist') AS Speciality FROM staff WHERE StaffStatus = 1 ORDER BY StaffName ASC", conn);
+                using var str = stCmd.ExecuteReader();
+                while (str.Read())
+                {
+                    model.AvailableStaff.Add(new
+                    {
+                        StaffId = Convert.ToInt32(str["StaffId"]),
+                        StaffName = str["StaffName"].ToString()!,
+                        Speciality = str["Speciality"].ToString()!
+                    });
+                }
+            }
+
+            return View(model);
+        }
+
+        protected List<TimeSlotItem> CalculateAvailableTimeSlots(SqlConnection conn, int staffId, DateTime date)
+        {
+            List<TimeSlotItem> slots = new List<TimeSlotItem>();
+            TimeSpan startTime = new TimeSpan(9, 0, 0); // 09:00 AM
+            TimeSpan endTime = new TimeSpan(19, 0, 0);  // 07:00 PM
+            TimeSpan interval = TimeSpan.FromMinutes(30);
+
+            // 1. Check if Staff is on Approved Leave for this date
+            bool isOnLeave = false;
+            if (staffId > 0)
+            {
+                SqlCommand leaveCmd = new SqlCommand(@"
+                    IF OBJECT_ID('dbo.StaffLeaveRequests', 'U') IS NOT NULL
+                    BEGIN
+                        SELECT COUNT(*) FROM StaffLeaveRequests 
+                        WHERE StaffId = @sid AND CAST(LeaveDate AS DATE) = CAST(@d AS DATE) AND Status = 'Approved'
+                    END
+                    ELSE SELECT 0", conn);
+                leaveCmd.Parameters.AddWithValue("@sid", staffId);
+                leaveCmd.Parameters.AddWithValue("@d", date.Date);
+                int leaveCount = Convert.ToInt32(leaveCmd.ExecuteScalar());
+                if (leaveCount > 0) isOnLeave = true;
+            }
+
+            // 2. Fetch Existing Booked Slots
+            HashSet<TimeSpan> bookedTimes = new HashSet<TimeSpan>();
+            string appQuery = staffId > 0
+                ? "SELECT AppTime FROM appointments WHERE CAST(AppDate AS DATE) = CAST(@d AS DATE) AND App_Booked_For = @sid AND AppStatus IN (1, 3)"
+                : "SELECT AppTime FROM appointments WHERE CAST(AppDate AS DATE) = CAST(@d AS DATE) AND AppStatus IN (1, 3)";
+
+            using (SqlCommand appCmd = new SqlCommand(appQuery, conn))
+            {
+                appCmd.Parameters.AddWithValue("@d", date.Date);
+                if (staffId > 0) appCmd.Parameters.AddWithValue("@sid", staffId);
+                using var r = appCmd.ExecuteReader();
+                while (r.Read())
+                {
+                    bookedTimes.Add((TimeSpan)r["AppTime"]);
+                }
+            }
+
+            DateTime now = DateTime.Now;
+
+            for (TimeSpan current = startTime; current < endTime; current = current.Add(interval))
+            {
+                string displayTime = DateTime.Today.Add(current).ToString("hh:mm tt");
+                bool available = true;
+                string reason = "Available";
+
+                if (isOnLeave)
+                {
+                    available = false;
+                    reason = "Stylist on Leave";
+                }
+                else if (bookedTimes.Contains(current))
+                {
+                    available = false;
+                    reason = "Already Booked";
+                }
+                else if (date.Date == now.Date && current <= now.TimeOfDay)
+                {
+                    available = false;
+                    reason = "Time Past";
+                }
+
+                slots.Add(new TimeSlotItem
+                {
+                    Time = current,
+                    DisplayTime = displayTime,
+                    IsAvailable = available,
+                    Reason = reason
+                });
+            }
+
+            return slots;
+        }
+
+        [HttpGet]
+        public JsonResult GetAvailableTimeSlots(int staffId, string date)
+        {
+            if (!DateTime.TryParse(date, out DateTime parsedDate))
+            {
+                parsedDate = DateTime.Today;
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                var slots = CalculateAvailableTimeSlots(conn, staffId, parsedDate);
+                var result = slots.Select(s => new
+                {
+                    time = s.Time.ToString(@"hh\:mm\:ss"),
+                    displayTime = s.DisplayTime,
+                    isAvailable = s.IsAvailable,
+                    reason = s.Reason
+                });
+                return Json(result);
+            }
+        }
+
+        [HttpPost]
+        public IActionResult BookAppointment(BookAppointmentViewModel model)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            if (model.SelectedServiceId <= 0)
+            {
+                TempData["ErrorMessage"] = "Please select a valid service to book.";
+                return RedirectToAction("BookAppointment", new { serviceId = model.SelectedServiceId, staffId = model.SelectedStaffId });
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+
+                // If no staff explicitly selected, assign first available active staff
+                int assignedStaffId = model.SelectedStaffId;
+                if (assignedStaffId <= 0)
+                {
+                    SqlCommand defaultStaffCmd = new SqlCommand("SELECT TOP 1 StaffId FROM staff WHERE StaffStatus = 1 ORDER BY StaffId ASC", conn);
+                    object? resStaff = defaultStaffCmd.ExecuteScalar();
+                    if (resStaff != null && resStaff != DBNull.Value)
+                    {
+                        assignedStaffId = Convert.ToInt32(resStaff);
+                    }
+                    else
+                    {
+                        TempData["ErrorMessage"] = "No active staff members are available for booking at this time.";
+                        return RedirectToAction("BookAppointment");
+                    }
+                }
+
+                // Verify Double-Booking / Leave
+                var availableSlots = CalculateAvailableTimeSlots(conn, assignedStaffId, model.AppDate);
+                var targetSlot = availableSlots.FirstOrDefault(s => s.Time == model.AppTime);
+
+                if (targetSlot == null || !targetSlot.IsAvailable)
+                {
+                    TempData["ErrorMessage"] = $"The selected time slot is unavailable ({targetSlot?.Reason ?? "Slot unavailable"}). Please select another slot.";
+                    return RedirectToAction("BookAppointment", new { serviceId = model.SelectedServiceId, staffId = assignedStaffId });
+                }
+
+                // Insert into appointments table (Status 1 = Pending)
+                SqlCommand appCmd = new SqlCommand(@"
+                    INSERT INTO appointments (CId, AppDate, AppTime, App_Booked_For, App_Booked_By, AppStatus)
+                    OUTPUT INSERTED.AppId
+                    VALUES (@cid, @d, @t, @bf, @bb, 1)", conn);
+
+
+                appCmd.Parameters.AddWithValue("@cid", clientId);
+                appCmd.Parameters.AddWithValue("@d", model.AppDate.Date);
+                appCmd.Parameters.AddWithValue("@t", model.AppTime);
+                appCmd.Parameters.AddWithValue("@bf", assignedStaffId);
+                appCmd.Parameters.AddWithValue("@bb", assignedStaffId); // Booked for/by staff link
+
+                int newAppId = Convert.ToInt32(appCmd.ExecuteScalar());
+
+                // Insert into appointmentservices table
+                SqlCommand appServCmd = new SqlCommand(@"
+                    INSERT INTO appointmentservices (ApId, SeId) 
+                    VALUES (@appId, @serviceId)", conn);
+                appServCmd.Parameters.AddWithValue("@appId", newAppId);
+                appServCmd.Parameters.AddWithValue("@serviceId", model.SelectedServiceId);
+                appServCmd.ExecuteNonQuery();
+
+                // Activity Log
+                try
+                {
+                    SqlCommand logCmd = new SqlCommand(@"
+                        IF OBJECT_ID('dbo.UserActivityLog', 'U') IS NOT NULL
+                        INSERT INTO UserActivityLog (UserId, UserRole, ActionType, LogMessage)
+                        VALUES (@uid, 'User', 'BOOK_APPOINTMENT', @msg)", conn);
+                    logCmd.Parameters.AddWithValue("@uid", userId);
+                    logCmd.Parameters.AddWithValue("@msg", $"Appointment #{newAppId} booked for {model.AppDate.ToString("yyyy-MM-dd")} at {targetSlot.DisplayTime}");
+                    logCmd.ExecuteNonQuery();
+                }
+                catch { }
+            }
+
+            TempData["SuccessMessage"] = "Appointment booked successfully! We look forward to welcoming you.";
+            return RedirectToAction("MyAppointments");
+        }
+
+        [HttpGet]
+        public IActionResult MyAppointments()
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            List<UserAppointmentViewModel> upcomingList = new List<UserAppointmentViewModel>();
+            List<UserAppointmentViewModel> historyList = new List<UserAppointmentViewModel>();
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+
+                string query = @"
+                    SELECT a.AppId, a.AppDate, a.AppTime, a.AppStatus, 
+                           s.StaffId, ISNULL(s.StaffName, 'Assigned Stylist') AS StaffName, ISNULL(s.StaffSpecialilty, 'Specialist') AS StaffSpecialilty,
+                           srv.ServiceId, ISNULL(srv.ServiceName, 'Salon Service') AS ServiceName, ISNULL(srv.ServicePrice, 0) AS ServicePrice,
+                           act.StatusType,
+                           r.ReviewId, r.Rating, r.Comment
+                    FROM appointments a
+                    LEFT JOIN staff s ON a.App_Booked_For = s.StaffId
+                    LEFT JOIN appointmentservices aps ON a.AppId = aps.ApId
+                    LEFT JOIN salonservices srv ON aps.SeId = srv.ServiceId
+                    LEFT JOIN activestatus act ON a.AppStatus = act.StatusId
+                    LEFT JOIN Reviews r ON a.AppId = r.AppointmentId AND r.UserId = @uid
+                    WHERE a.CId = @cid
+                    ORDER BY a.AppDate DESC, a.AppTime DESC";
+
+                using (SqlCommand cmd = new SqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", clientId);
+                    cmd.Parameters.AddWithValue("@uid", userId);
+                    using var reader = cmd.ExecuteReader();
+
+                    DateTime now = DateTime.Now;
+
+                    while (reader.Read())
+                    {
+                        int appId = Convert.ToInt32(reader["AppId"]);
+                        DateTime appDate = Convert.ToDateTime(reader["AppDate"]);
+                        TimeSpan appTime = (TimeSpan)reader["AppTime"];
+                        int status = Convert.ToInt32(reader["AppStatus"]);
+                        string statusType = reader["StatusType"] != DBNull.Value ? reader["StatusType"].ToString()! : "Scheduled";
+
+                        DateTime appDateTime = appDate.Date + appTime;
+                        bool canModify = (status == 1 || status == 3) && (appDateTime - now).TotalHours >= 2;
+
+                        bool hasReviewed = reader["ReviewId"] != DBNull.Value;
+                        int? rating = hasReviewed ? Convert.ToInt32(reader["Rating"]) : (int?)null;
+                        string? comment = hasReviewed ? reader["Comment"]?.ToString() : null;
+
+                        string badgeClass = status switch
+                        {
+                            3 => "badge-scheduled",
+                            4 => "badge-completed",
+                            5 => "badge-cancelled",
+                            _ => "badge-pending"
+                        };
+
+                        var item = new UserAppointmentViewModel
+                        {
+                            AppId = appId,
+                            StaffId = reader["StaffId"] != DBNull.Value ? Convert.ToInt32(reader["StaffId"]) : 0,
+                            StaffName = reader["StaffName"].ToString()!,
+                            StaffSpeciality = reader["StaffSpecialilty"].ToString()!,
+                            ServiceId = reader["ServiceId"] != DBNull.Value ? Convert.ToInt32(reader["ServiceId"]) : 0,
+                            ServiceName = reader["ServiceName"].ToString()!,
+                            ServicePrice = Convert.ToDecimal(reader["ServicePrice"]),
+                            AppDate = appDate,
+                            AppTime = appTime,
+                            DisplayTime = DateTime.Today.Add(appTime).ToString("hh:mm tt"),
+                            AppStatus = status,
+                            StatusName = statusType,
+                            StatusBadgeClass = badgeClass,
+                            CanCancelOrReschedule = canModify,
+                            HasBeenReviewed = hasReviewed,
+                            Rating = rating,
+                            Comment = comment
+                        };
+
+                        if ((status == 1 || status == 3) && appDateTime >= now)
+                        {
+                            upcomingList.Add(item);
+                        }
+                        else
+                        {
+                            historyList.Add(item);
+                        }
+                    }
+                }
+            }
+
+            ViewBag.UpcomingAppointments = upcomingList;
+            ViewBag.HistoryAppointments = historyList;
+
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult CancelAppointment(int id)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+
+                SqlCommand cmd = new SqlCommand("SELECT AppDate, AppTime, AppStatus FROM appointments WHERE AppId = @id AND CId = @cid", conn);
+                cmd.Parameters.AddWithValue("@id", id);
+                cmd.Parameters.AddWithValue("@cid", clientId);
+
+                using var r = cmd.ExecuteReader();
+                if (!r.Read())
+                {
+                    TempData["ErrorMessage"] = "Appointment record not found.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                DateTime appDate = Convert.ToDateTime(r["AppDate"]);
+                TimeSpan appTime = (TimeSpan)r["AppTime"];
+                int currentStatus = Convert.ToInt32(r["AppStatus"]);
+                r.Close();
+
+                DateTime appDateTime = appDate.Date + appTime;
+                DateTime now = DateTime.Now;
+
+                // 2-Hour Cutoff Rule Check
+                if ((appDateTime - now).TotalHours < 2)
+                {
+                    TempData["ErrorMessage"] = "Appointments cannot be cancelled within 2 hours of the scheduled time. Please contact salon support.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                if (currentStatus == 4 || currentStatus == 5)
+                {
+                    TempData["ErrorMessage"] = "Completed or already cancelled appointments cannot be modified.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                // Update AppStatus to 5 (Cancelled)
+                SqlCommand updateCmd = new SqlCommand("UPDATE appointments SET AppStatus = 5 WHERE AppId = @id", conn);
+                updateCmd.Parameters.AddWithValue("@id", id);
+                updateCmd.ExecuteNonQuery();
+
+                // Activity Log
+                try
+                {
+                    SqlCommand logCmd = new SqlCommand(@"
+                        IF OBJECT_ID('dbo.UserActivityLog', 'U') IS NOT NULL
+                        INSERT INTO UserActivityLog (UserId, UserRole, ActionType, LogMessage)
+                        VALUES (@uid, 'User', 'CANCEL_APPOINTMENT', @msg)", conn);
+                    logCmd.Parameters.AddWithValue("@uid", userId);
+                    logCmd.Parameters.AddWithValue("@msg", $"Appointment #{id} cancelled by client.");
+                    logCmd.ExecuteNonQuery();
+                }
+                catch { }
+            }
+
+            TempData["SuccessMessage"] = "Appointment cancelled successfully.";
+            return RedirectToAction("MyAppointments");
+        }
+
+        [HttpPost]
+        public IActionResult RescheduleAppointment(int id, DateTime newDate, TimeSpan newTime)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+
+                SqlCommand cmd = new SqlCommand("SELECT AppDate, AppTime, App_Booked_For, AppStatus FROM appointments WHERE AppId = @id AND CId = @cid", conn);
+                cmd.Parameters.AddWithValue("@id", id);
+                cmd.Parameters.AddWithValue("@cid", clientId);
+
+                using var r = cmd.ExecuteReader();
+                if (!r.Read())
+                {
+                    TempData["ErrorMessage"] = "Appointment record not found.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                DateTime origDate = Convert.ToDateTime(r["AppDate"]);
+                TimeSpan origTime = (TimeSpan)r["AppTime"];
+                int staffId = Convert.ToInt32(r["App_Booked_For"]);
+                int currentStatus = Convert.ToInt32(r["AppStatus"]);
+                r.Close();
+
+                DateTime origDateTime = origDate.Date + origTime;
+                DateTime now = DateTime.Now;
+
+                // 2-Hour Cutoff Rule Check
+                if ((origDateTime - now).TotalHours < 2)
+                {
+                    TempData["ErrorMessage"] = "Appointments cannot be rescheduled within 2 hours of the scheduled time.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                if (currentStatus == 4 || currentStatus == 5)
+                {
+                    TempData["ErrorMessage"] = "Completed or cancelled appointments cannot be rescheduled.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                // Check slot availability on new date
+                var slots = CalculateAvailableTimeSlots(conn, staffId, newDate);
+                var targetSlot = slots.FirstOrDefault(s => s.Time == newTime);
+
+                if (targetSlot == null || !targetSlot.IsAvailable)
+                {
+                    TempData["ErrorMessage"] = $"The selected reschedule time slot is unavailable ({targetSlot?.Reason ?? "Slot unavailable"}).";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                // Update AppDate & AppTime
+                SqlCommand updateCmd = new SqlCommand("UPDATE appointments SET AppDate = @d, AppTime = @t, AppStatus = 3 WHERE AppId = @id", conn);
+                updateCmd.Parameters.AddWithValue("@d", newDate.Date);
+                updateCmd.Parameters.AddWithValue("@t", newTime);
+                updateCmd.Parameters.AddWithValue("@id", id);
+                updateCmd.ExecuteNonQuery();
+
+                // Activity Log
+                try
+                {
+                    SqlCommand logCmd = new SqlCommand(@"
+                        IF OBJECT_ID('dbo.UserActivityLog', 'U') IS NOT NULL
+                        INSERT INTO UserActivityLog (UserId, UserRole, ActionType, LogMessage)
+                        VALUES (@uid, 'User', 'RESCHEDULE_APPOINTMENT', @msg)", conn);
+                    logCmd.Parameters.AddWithValue("@uid", userId);
+                    logCmd.Parameters.AddWithValue("@msg", $"Appointment #{id} rescheduled to {newDate.ToString("yyyy-MM-dd")} at {targetSlot.DisplayTime}");
+                    logCmd.ExecuteNonQuery();
+                }
+                catch { }
+            }
+
+            TempData["SuccessMessage"] = "Appointment rescheduled successfully!";
+            return RedirectToAction("MyAppointments");
+        }
+
+        [HttpPost]
+        public IActionResult SubmitReview(ReviewViewModel model)
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            if (model.AppointmentId <= 0 || model.Rating < 1 || model.Rating > 5)
+            {
+                TempData["ErrorMessage"] = "Please select a valid rating between 1 and 5 stars.";
+                return RedirectToAction("MyAppointments");
+            }
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+
+                // Verify appointment is completed (AppStatus = 4) and belongs to user
+                SqlCommand checkCmd = new SqlCommand("SELECT AppStatus, App_Booked_For FROM appointments WHERE AppId = @aid AND CId = @cid", conn);
+                checkCmd.Parameters.AddWithValue("@aid", model.AppointmentId);
+                checkCmd.Parameters.AddWithValue("@cid", clientId);
+
+                using var r = checkCmd.ExecuteReader();
+                if (!r.Read())
+                {
+                    TempData["ErrorMessage"] = "Appointment not found.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                int status = Convert.ToInt32(r["AppStatus"]);
+                int staffId = Convert.ToInt32(r["App_Booked_For"]);
+                r.Close();
+
+                if (status != 4)
+                {
+                    TempData["ErrorMessage"] = "Reviews can only be submitted for completed appointments.";
+                    return RedirectToAction("MyAppointments");
+                }
+
+                // Insert or Update Review
+                SqlCommand reviewCmd = new SqlCommand(@"
+                    IF NOT EXISTS (SELECT 1 FROM Reviews WHERE AppointmentId = @aid AND UserId = @uid)
+                    BEGIN
+                        INSERT INTO Reviews (AppointmentId, UserId, StaffId, Rating, Comment, CreatedDate)
+                        VALUES (@aid, @uid, @sid, @rating, @comment, GETDATE());
+                    END
+                    ELSE
+                    BEGIN
+                        UPDATE Reviews SET Rating = @rating, Comment = @comment WHERE AppointmentId = @aid AND UserId = @uid;
+                    END", conn);
+
+                reviewCmd.Parameters.AddWithValue("@aid", model.AppointmentId);
+                reviewCmd.Parameters.AddWithValue("@uid", userId);
+                reviewCmd.Parameters.AddWithValue("@sid", staffId);
+                reviewCmd.Parameters.AddWithValue("@rating", model.Rating);
+                reviewCmd.Parameters.AddWithValue("@comment", string.IsNullOrWhiteSpace(model.Comment) ? (object)DBNull.Value : model.Comment.Trim());
+                reviewCmd.ExecuteNonQuery();
+            }
+
+            TempData["SuccessMessage"] = "Thank you for your rating and review feedback!";
+            return RedirectToAction("MyAppointments");
+        }
+
+        [HttpGet]
+        public IActionResult Reviews()
+        {
+            if (!EnsureUserAuthorized(out int userId, out string userName))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            List<dynamic> reviewsList = new List<dynamic>();
+
+            using (SqlConnection conn = new SqlConnection(_connection))
+            {
+                conn.Open();
+                int clientId = GetLoggedInClientId(conn, userId, userName);
+                CheckUpcomingReminders(conn, clientId);
+
+                SqlCommand cmd = new SqlCommand(@"
+                    SELECT r.ReviewId, r.Rating, r.Comment, r.CreatedDate,
+                           s.StaffName, srv.ServiceName
+                    FROM Reviews r
+                    INNER JOIN staff s ON r.StaffId = s.StaffId
+                    INNER JOIN appointments a ON r.AppointmentId = a.AppId
+                    LEFT JOIN appointmentservices aps ON a.AppId = aps.ApId
+                    LEFT JOIN salonservices srv ON aps.SeId = srv.ServiceId
+                    WHERE r.UserId = @uid
+                    ORDER BY r.CreatedDate DESC", conn);
+
+                cmd.Parameters.AddWithValue("@uid", userId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    reviewsList.Add(new
+                    {
+                        ReviewId = Convert.ToInt32(reader["ReviewId"]),
+                        Rating = Convert.ToInt32(reader["Rating"]),
+                        Comment = reader["Comment"] != DBNull.Value ? reader["Comment"].ToString() : "No comment left.",
+                        CreatedDate = Convert.ToDateTime(reader["CreatedDate"]).ToString("MMM dd, yyyy"),
+                        StaffName = reader["StaffName"].ToString()!,
+                        ServiceName = reader["ServiceName"] != DBNull.Value ? reader["ServiceName"].ToString()! : "Salon Service"
+                    });
+                }
+            }
+
+            return View(reviewsList);
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    }
+}

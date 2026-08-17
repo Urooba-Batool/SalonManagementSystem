@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Studio &mdash; Salon Management System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-deep-dark: #0b0e14;
+            --bg-card-dark: #131924;
+            --bg-sidebar: #0f141d;
+            --teal-primary: #0d9488;
+            --teal-glow: #14b8a6;
+            --teal-light: #2dd4bf;
+            --gold-accent: #d4af37;
+            --gold-light: #fef08a;
+            --border-gold: rgba(212, 175, 55, 0.2);
+            --border-teal: rgba(13, 148, 136, 0.25);
+            --text-heading: #ffffff;
+            --text-body: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-deep-dark);
+            color: var(--text-heading);
+            overflow-x: hidden;
+            color-scheme: dark;
+        }
+
+        /* ── Dark Theme Dropdown Select & Option Styling for Admin ── */
+        select, .form-select, .form-control {
+            color-scheme: dark;
+        }
+
+        select option, .form-select option, .form-control option {
+            background-color: #131924 !important;
+            color: #ffffff !important;
+            padding: 10px 14px;
+        }
+
+        select option:hover,
+        select option:focus,
+        select option:checked {
+            background-color: #d4af37 !important;
+            color: #0b0e14 !important;
+        }
+
+        .admin-wrapper {
+            display: flex;
+            min-height: 100vh;
+            width: 100vw;
+        }
+
+        /* ── Sidebar Styling ── */
+        .sidebar {
+            width: 270px;
+            min-width: 270px;
+            height: 100vh;
+            max-height: 100vh;
+            background: linear-gradient(180deg, #131924 0%, #0b0e14 100%);
+            border-right: 1px solid var(--border-gold);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: fixed;
+            top: 0; bottom: 0; left: 0;
+            z-index: 100;
+            padding: 20px 14px;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.4);
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* Custom Scrollbar for Nav Menu */
+        .nav-menu::-webkit-scrollbar {
+            width: 7px;
+        }
+
+        .nav-menu::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .nav-menu::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #d4af37 0%, #0d9488 100%);
+            border-radius: 10px;
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
+
+        .nav-menu::-webkit-scrollbar-thumb:hover {
+            background: #f2ca50;
+        }
+
+        /* Brand Logo in Sidebar */
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 4px 10px 18px 10px;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+            margin-bottom: 14px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #d4af37 0%, #0d9488 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #ffffff;
+            box-shadow: 0 6px 16px rgba(212, 175, 55, 0.3);
+        }
+
+        .sidebar-brand-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.1;
+        }
+
+        .sidebar-brand-text span {
+            color: #d4af37;
+            display: block;
+            font-size: 0.72rem;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* Navigation List */
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overflow-y: auto !important;
+            flex: 1;
+            min-height: 0;
+            padding-right: 6px;
+            margin-bottom: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: #d4af37 rgba(11, 14, 20, 0.6);
+        }
+
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding-top: 10px;
+            border-top: 1px solid rgba(212, 175, 55, 0.15);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-body);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 12px;
+            transition: all 0.25s ease;
+            border: 1px solid transparent;
+        }
+
+        .nav-item i {
+            font-size: 1rem;
+            width: 22px;
+            text-align: center;
+            color: #d4af37;
+            transition: transform 0.25s ease;
+        }
+
+        .nav-item:hover {
+            color: #ffffff;
+            background: rgba(212, 175, 55, 0.08);
+            border-color: rgba(212, 175, 55, 0.2);
+            transform: translateX(4px);
+        }
+
+        .nav-item:hover i {
+            transform: scale(1.15);
+            color: #2dd4bf;
+        }
+
+        .nav-item.active {
+            color: #ffffff;
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(13, 148, 136, 0.15) 100%);
+            border-color: #d4af37;
+            box-shadow: 0 4px 16px rgba(212, 175, 55, 0.2);
+        }
+
+        .nav-item.active i {
+            color: #d4af37;
+        }
+
+        /* Logout Button Footer */
+        .sidebar-footer {
+            padding-top: 16px;
+            border-top: 1px solid rgba(212, 175, 55, 0.15);
+        }
+
+        .btn-logout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 12px;
+            background: rgba(244, 63, 94, 0.1);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            border-radius: 12px;
+            color: #fca5a5;
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 700;
+            transition: all 0.3s ease;
+        }
+
+        .btn-logout:hover {
+            background: #f43f5e;
+            color: #ffffff;
+            border-color: #f43f5e;
+            box-shadow: 0 6px 20px rgba(244, 63, 94, 0.4);
+        }
+
+        /* ── Main Content Area ── */
+        .main-content {
+            margin-left: 270px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Top Header Bar */
+        .top-header {
+            height: 72px;
+            background: rgba(19, 25, 36, 0.8);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-gold);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 36px;
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .header-title-area h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .header-title-area p {
+            font-size: 0.78rem;
+            color: var(--text-body);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .status-badge {
+            background: rgba(13, 148, 136, 0.15);
+            border: 1px solid rgba(13, 148, 136, 0.4);
+            border-radius: 50px;
+            padding: 6px 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #2dd4bf;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2dd4bf;
+            box-shadow: 0 0 10px #2dd4bf;
+            animation: pulse 2s infinite;
+        }
+
+        @@keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .user-profile-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-gold);
+            border-radius: 50px;
+            padding: 6px 16px 6px 8px;
+        }
+
+        .avatar-circle {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #d4af37, #0d9488);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0b0e14;
+            font-size: 0.9rem;
+            font-weight: 800;
+        }
+
+        .user-profile-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-profile-name {
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .user-profile-role {
+            font-size: 0.68rem;
+            color: var(--gold-accent);
+            font-weight: 600;
+        }
+
+        /* ── Mobile Hamburger Toggle & Overlay Backdrop ── */
+        .mobile-menu-btn {
+            display: none;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-gold);
+            color: #d4af37;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-menu-btn:hover {
+            background: rgba(212, 175, 55, 0.15);
+            color: #ffffff;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(11, 14, 20, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 95;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* ── Responsive Media Queries ── */
+        @@media (max-width: 992px) {
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 20px 0 50px rgba(0, 0, 0, 0.6);
+            }
+
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+
+            .top-header {
+                padding: 0 16px !important;
+            }
+
+            .header-title-area h2 {
+                font-size: 1.15rem;
+            }
+
+            .header-title-area p {
+                font-size: 0.72rem;
+            }
+
+            .status-badge {
+                display: none;
+            }
+
+            .page-body {
+                padding: 16px !important;
+            }
+        }
+
+        @@media (max-width: 576px) {
+            .user-profile-info {
+                display: none;
+            }
+            .user-profile-badge {
+                padding: 4px;
+            }
+        }
+
+        /* Content Body Wrapper */
+        .page-body {
+            padding: 36px;
+            flex: 1;
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @@keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+    @RenderSection("Styles", required: false)
+</head>
+<body>
+
+    <div class="admin-wrapper">
+
+        <!-- ── Sidebar ── -->
+        <aside class="sidebar">
+            <!-- Brand Header -->
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-icon">
+                    <i class="fa-solid fa-scissors"></i>
+                </div>
+                <div class="sidebar-brand-text">
+                    Styl<span>Onyx</span>
+                    <span style="font-size:0.7rem; color:var(--text-body); font-weight:400; display:block;">Executive Studio</span>
+                </div>
+            </div>
+
+            <!-- Navigation List -->
+            <nav class="nav-menu">
+                <a href="/Admin/Home" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "Home" ? "active" : "")">
+                    <i class="fa-solid fa-chart-pie"></i> Dashboard
+                </a>
+                <a href="/Admin/DayRevenue" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "DayRevenue" ? "active" : "")">
+                    <i class="fa-solid fa-sun"></i> Day Revenue
+                </a>
+                <a href="/Admin/TotalRevenue" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "TotalRevenue" ? "active" : "")">
+                    <i class="fa-solid fa-vault"></i> Total Revenue
+                </a>
+                <a href="/Admin/UpdateService" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "UpdateService" || ViewContext.RouteData.Values["Action"]?.ToString() == "AddService" ? "active" : "")">
+                    <i class="fa-solid fa-scissors"></i> Manage Services
+                </a>
+                <a href="/Admin/UpdateStaff" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "UpdateStaff" ? "active" : "")">
+                    <i class="fa-solid fa-users"></i> Manage Staff Team
+                </a>
+                <a href="/Admin/StaffAttendance" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "StaffAttendance" ? "active" : "")">
+                    <i class="fa-solid fa-calendar-days"></i> Staff Attendance Log
+                </a>
+                <a href="/Admin/ManageLeaveRequests" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManageLeaveRequests" ? "active" : "")">
+                    <i class="fa-solid fa-plane-arrival"></i> Staff Leave Requests
+                </a>
+                <a href="/Admin/AddStaff" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "AddStaff" ? "active" : "")">
+                    <i class="fa-solid fa-user-plus"></i> Add Staff Specialist
+                </a>
+                <a href="/Admin/ManageBrands" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManageBrands" || ViewContext.RouteData.Values["Action"]?.ToString() == "AddBrand" ? "active" : "")">
+                    <i class="fa-solid fa-tags"></i> Manage Brands
+                </a>
+                <a href="/Admin/ManageProducts" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManageProducts" || ViewContext.RouteData.Values["Action"]?.ToString() == "AddProduct" ? "active" : "")">
+                    <i class="fa-solid fa-box-open"></i> Manage Products
+                </a>
+                <a href="/Admin/ManageClients" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManageClients" ? "active" : "")">
+                    <i class="fa-solid fa-user-group"></i> Manage Clients
+                </a>
+                <a href="/Admin/ManageAdmins" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "ManageAdmins" ? "active" : "")">
+                    <i class="fa-solid fa-crown"></i> Manage Admins
+                </a>
+                <a href="/Admin/ActivityLogs" class="nav-item @(ViewContext.RouteData.Values["Action"]?.ToString() == "ActivityLogs" ? "active" : "")">
+                    <i class="fa-solid fa-clipboard-list"></i> Activity Logs
+                </a>
+                <a href="#" onclick="confirmResetDb(); return false;" class="nav-item" style="color:#fca5a5;">
+                    <i class="fa-solid fa-broom" style="color:#f43f5e;"></i> Clean Database
+                </a>
+            </nav>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer">
+                <a href="/Login/Logout" class="btn-logout">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout Portal
+                </a>
+            </div>
+        </aside>
+
+        <!-- Mobile Overlay Backdrop -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- ── Main Content Area ── -->
+        <main class="main-content">
+            <!-- Top Header Bar -->
+            <header class="top-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Navigation">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="header-title-area">
+                        <h2>Admin Management Studio</h2>
+                        <p>Salon Management System &bull; Live Control Center</p>
+                    </div>
+                </div>
+
+                <div class="header-actions">
+                    <div class="status-badge">
+                        <div class="status-dot"></div>
+                        <span>Database Online</span>
+                    </div>
+
+                    <div class="user-profile-badge">
+                        <div class="avatar-circle">
+                            <i class="fa-solid fa-crown"></i>
+                        </div>
+                        <div class="user-profile-info">
+                            <span class="user-profile-name">@(Context.Session.GetString("UserName") ?? "Admin")</span>
+                            <span class="user-profile-role">Executive Administrator</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Body -->
+            <div class="page-body">
+                @RenderBody()
+            </div>
+        </main>
+
+    </div>
+
+    <!-- SweetAlert2 Toast Notifications & Utility Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <text>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: '@TempData["SuccessMessage"]',
+                timer: 2500,
+                showConfirmButton: false,
+                background: '#131924',
+                color: '#ffffff',
+                iconColor: '#d4af37'
+            });
+            </text>
+        }
+
+        function confirmResetDb() {
+            Swal.fire({
+                title: 'Clean Entire Database?',
+                text: 'This will wipe all sample records (staff, services, products, brands, clients, activity logs) so you can enter your custom data from scratch. Are you sure?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f43f5e',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Clean Database',
+                background: '#131924',
+                color: '#ffffff'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '/Admin/CleanDatabase';
+                }
+            });
+        }
+        // ── Mobile Sidebar Drawer Toggle ──
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.querySelector('.sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+        if (mobileMenuBtn && sidebar && sidebarOverlay) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('mobile-open');
+                sidebarOverlay.classList.toggle('active');
+            });
+
+            sidebarOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('mobile-open');
+                sidebarOverlay.classList.remove('active');
+            });
+        }
+    </script>
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
